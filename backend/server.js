@@ -1,83 +1,65 @@
-import express from "express"
-import cors from "cors"
-import dotenv from "dotenv"
+const http = require('http');
+const { Server } = require('socket.io');
+const dotenv = require('dotenv');
+const express = require('express');
 
 dotenv.config();
 
 const app = express();
-app.use(cors());
 
-const usuarios = [
-  {
-    id: 1,
-    nome: "Luis",
-    nacionalidade: "Brasileiro"
-  },
-  {
-    id: 2,
-    nome: "Isabele",
-    nacionalidade: "Brasileira"
-  },
-  {
-    id: 3,
-    nome: "Carlos",
-    nacionalidade: "Português"
-  },
-  {
-    id: 4,
-    nome: "Ana",
-    nacionalidade: "Argentina"
-  },
-  {
-    id: 5,
-    nome: "Mariana",
-    nacionalidade: "Brasileira"
-  },
-  {
-    id: 6,
-    nome: "João",
-    nacionalidade: "Brasileiro"
-  },
-  {
-    id: 7,
-    nome: "Pedro",
-    nacionalidade: "Mexicano"
-  },
-  {
-    id: 8,
-    nome: "Lucia",
-    nacionalidade: "Espanhola"
-  },
-  {
-    id: 9,
-    nome: "Fernando",
-    nacionalidade: "Chileno"
-  },
-  {
-    id: 10,
-    nome: "Sofia",
-    nacionalidade: "Colombiana"
-  }
-];
+// Criar servidor HTTP
+const server = http.createServer(app);
 
-// Endpoint que retorna um usuário pelo ID
-app.get('/usuario/:id', (req, res) => {
-  const id = parseInt(req.params.id);
+// Configurar Socket.IO - instância do Socket.IO que fica "acoplada" ao servidor HTTP criado;
+const io = new Server(server);
 
-  const usuario = usuarios.find(u => u.id === id);
+// Conexão Socket - sempre que um cliente se conecta, essa função é executada (se 5 pessoas se conectarem, a função roda 5 vezes)
+io.on('connection', (socket) => { // -> cada cliente recebe um objeto socket (representa, apenas, aquele usuário)
+  console.log('Usuário conectado:', socket.id);
 
-  if (!usuario) {
-    return res.status(404).json({
-      erro: "Usuário não encontrado"
+  // Evento quando usuário entra no chat
+  socket.on('join', ({ username }) => { //Fica escutando o evento 'join' (enviado pelo frontend)
+    socket.username = username;
+
+    console.log(`${username} entrou`);
+
+    io.emit('message', {
+      type: 'system',
+      text: `${username} entrou no chat`
     });
-  }
+  });
 
-  res.json(usuario);
+  // Evento de mensagem
+  socket.on('chat', ({ text }) => {
+    if (!socket.username) return;
+
+    io.emit('message', {
+      type: 'chat',
+      username: socket.username,
+      text
+    });
+  });
+
+  // Quando desconecta
+  socket.on('disconnect', () => {
+    if (socket.username) {
+      io.emit('message', {
+        type: 'system',
+        text: `${socket.username} saiu do chat`
+      });
+    }
+
+    console.log('Usuário desconectado:', socket.id);
+  });
 });
 
-// Porta do servidor
+// Rota básica para o Render detectar
+app.get('/', (req, res) => {
+  res.send('Servidor Socket.IO rodando');
+});
+
 const PORT = process.env.PORT;
 
-app.listen(PORT, () => {
-  console.log(`Servidor rodando em http://127.0.0.1:${PORT}`);
+server.listen(PORT, () => {
+  console.log(`Servidor rodando na porta ${PORT}`);
 });
